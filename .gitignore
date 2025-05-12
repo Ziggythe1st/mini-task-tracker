@@ -1,0 +1,4 @@
+node_modules/
+tasks.json
+.env
+logs.txt
