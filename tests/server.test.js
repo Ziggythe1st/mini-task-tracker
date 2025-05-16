@@ -20,28 +20,25 @@ describe("Task Tracker API", () => {
   });
 
   it("should add a task with POST /tasks", async () => {
-    const newTask = { title: "Test Task", completed: false };
     const response = await supertest(server)
       .post("/tasks")
-      .send(newTask)
+      .send({ title: "Test Task", completed: false })
       .set("Content-Type", "application/json");
 
     expect(response.status).toBe(201);
     expect(response.body).toEqual({
-      ...newTask,
+      title: "Test Task",
+      completed: false,
       id: 1,
     });
   });
 
   it("should return a task by ID with GET /tasks/:id", async () => {
-    // First, create a task
-    const task = { title: "Test Task", completed: false };
     await supertest(server)
       .post("/tasks")
-      .send(task)
+      .send({ title: "Test Task", completed: false })
       .set("Content-Type", "application/json");
 
-    // Then, get it by ID
     const response = await supertest(server).get("/tasks/1");
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
@@ -58,18 +55,14 @@ describe("Task Tracker API", () => {
   });
 
   it("should update a task with PUT /tasks/:id", async () => {
-    // First, create a task
-    const task = { title: "Test Task", completed: false };
     await supertest(server)
       .post("/tasks")
-      .send(task)
+      .send({ title: "Test Task", completed: false })
       .set("Content-Type", "application/json");
 
-    // Update the task
-    const updatedTask = { title: "Updated Task", completed: true };
     const response = await supertest(server)
       .put("/tasks/1")
-      .send(updatedTask)
+      .send({ title: "Updated Task", completed: true })
       .set("Content-Type", "application/json");
 
     expect(response.status).toBe(200);
@@ -81,21 +74,53 @@ describe("Task Tracker API", () => {
   });
 
   it("should delete a task with DELETE /tasks/:id", async () => {
-    // First, create a task
-    const task = { title: "Test Task", completed: false };
     await supertest(server)
       .post("/tasks")
-      .send(task)
+      .send({ title: "Test Task", completed: false })
       .set("Content-Type", "application/json");
 
-    // Delete the task
-    const deleteResponse = await supertest(server).delete("/tasks/1");
-    expect(deleteResponse.status).toBe(204);
+    const response = await supertest(server).delete("/tasks/1");
+    expect(response.status).toBe(204);
+  });
 
-    // Confirm it was deleted
-    const getResponse = await supertest(server).get("/tasks/1");
-    expect(getResponse.status).toBe(404);
-    expect(getResponse.body).toEqual({ error: "Task not found" });
+  it("should return 400 for missing title in POST /tasks", async () => {
+    const response = await supertest(server)
+      .post("/tasks")
+      .send({ completed: false })
+      .set("Content-Type", "application/json");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "Task must have a valid, non-empty title",
+    });
+  });
+
+  it("should return 400 for duplicate titles in POST /tasks", async () => {
+    await supertest(server)
+      .post("/tasks")
+      .send({ title: "Test Task", completed: false })
+      .set("Content-Type", "application/json");
+
+    const response = await supertest(server)
+      .post("/tasks")
+      .send({ title: "Test Task" })
+      .set("Content-Type", "application/json");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({ error: "Task title must be unique" });
+  });
+
+  it("should return 400 for title longer than 100 characters in POST /tasks", async () => {
+    const longTitle = "a".repeat(101);
+    const response = await supertest(server)
+      .post("/tasks")
+      .send({ title: longTitle, completed: false })
+      .set("Content-Type", "application/json");
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "Task title must be 100 characters or fewer",
+    });
   });
 
   it("should return 400 for invalid JSON in POST /tasks", async () => {
@@ -108,20 +133,126 @@ describe("Task Tracker API", () => {
     expect(response.body).toEqual({ error: "Invalid JSON" });
   });
 
-  it("should return 400 for invalid task updates in PUT /tasks/:id", async () => {
-    // First, create a task
-    const task = { title: "Test Task", completed: false };
-    await supertest(server)
-      .post("/tasks")
-      .send(task)
+  it("should return 404 for non-existent task on PUT", async () => {
+    const response = await supertest(server)
+      .put("/tasks/999")
+      .send({ title: "Non-existent Task" })
       .set("Content-Type", "application/json");
 
-    // Attempt to update with invalid data
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ error: "Task not found" });
+  });
+
+  it("should return 404 for non-existent task on DELETE", async () => {
+    const response = await supertest(server).delete("/tasks/999");
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({ error: "Task not found" });
+  });
+
+  it("should return 400 for non-boolean completed value in POST /tasks", async () => {
     const response = await supertest(server)
-      .put("/tasks/1")
-      .send({ title: 123 })
+      .post("/tasks")
+      .send({ title: "Task with Invalid Completed", completed: "yes" })
       .set("Content-Type", "application/json");
+
     expect(response.status).toBe(400);
-    expect(response.body).toEqual({ error: "Task title must be a string" });
+    expect(response.body).toEqual({
+      error: "Task completed must be a boolean",
+    });
+  });
+
+  const invalidIds = ["abc", "-1", "0", "1.5", "@!"];
+
+  invalidIds.forEach((invalidId) => {
+    it(`should return 400 for invalid task ID (${invalidId}) on GET /tasks/:id`, async () => {
+      const response = await supertest(server).get(`/tasks/${invalidId}`);
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: "Invalid task ID" });
+    });
+
+    it(`should return 400 for invalid task ID (${invalidId}) on PUT /tasks/:id`, async () => {
+      const response = await supertest(server)
+        .put(`/tasks/${invalidId}`)
+        .send({ title: "Updated Task" })
+        .set("Content-Type", "application/json");
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: "Invalid task ID" });
+    });
+
+    it(`should return 400 for invalid task ID (${invalidId}) on DELETE /tasks/:id`, async () => {
+      const response = await supertest(server).delete(`/tasks/${invalidId}`);
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ error: "Invalid task ID" });
+    });
+  });
+
+  const unsupportedTests = [
+    { method: "PUT", path: "/tasks" },
+    { method: "DELETE", path: "/tasks" },
+    { method: "POST", path: "/tasks/1" },
+    { method: "PATCH", path: "/tasks" },
+    { method: "PATCH", path: "/tasks/1" },
+  ];
+
+  unsupportedTests.forEach(({ method, path }) => {
+    it(`should return 405 for unsupported ${method} method at ${path}`, async () => {
+      const response = await supertest(server)
+        [method.toLowerCase()](path)
+        .send({ title: "Should Fail" })
+        .set("Content-Type", "application/json");
+
+      expect(response.status).toBe(405);
+      expect(response.body).toEqual({ error: "Method not allowed" });
+    });
+  });
+
+  // CORS Testing
+
+  // CORS Tests
+  const allowedOrigin = "http://localhost:3000";
+  const blockedOrigin = "http://unauthorized.com";
+
+  describe("CORS Headers", () => {
+    it("should include CORS headers for allowed origins", async () => {
+      const response = await supertest(server)
+        .get("/tasks")
+        .set("Origin", allowedOrigin);
+
+      expect(response.headers["access-control-allow-origin"]).toBe(
+        allowedOrigin
+      );
+      expect(response.headers["access-control-allow-methods"]).toBe(
+        "GET, POST, PUT, DELETE, OPTIONS"
+      );
+      expect(response.headers["access-control-allow-headers"]).toBe(
+        "Content-Type, Authorization"
+      );
+      expect(response.headers["access-control-allow-credentials"]).toBe("true");
+    });
+
+    it("should respond with 204 for preflight OPTIONS request", async () => {
+      const response = await supertest(server)
+        .options("/tasks")
+        .set("Origin", allowedOrigin);
+
+      expect(response.status).toBe(204);
+      expect(response.headers["access-control-allow-origin"]).toBe(
+        allowedOrigin
+      );
+      expect(response.headers["access-control-allow-methods"]).toBe(
+        "GET, POST, PUT, DELETE, OPTIONS"
+      );
+      expect(response.headers["access-control-allow-headers"]).toBe(
+        "Content-Type, Authorization"
+      );
+    });
+
+    it("should not include CORS headers for disallowed origins", async () => {
+      const response = await supertest(server)
+        .get("/tasks")
+        .set("Origin", blockedOrigin);
+
+      expect(response.headers["access-control-allow-origin"]).toBeUndefined();
+    });
   });
 });

@@ -1,8 +1,32 @@
+const fs = require("fs");
+
 function validateTask(task) {
-  if (!task.title || typeof task.title !== "string") {
-    return "Task must have a valid title";
+  // Validate title
+  if (
+    !task.title ||
+    typeof task.title !== "string" ||
+    task.title.trim() === ""
+  ) {
+    return "Task must have a valid, non-empty title";
   }
 
+  // Validate title length
+  if (task.title.length > 100) {
+    return "Task title must be 100 characters or fewer";
+  }
+
+  // Validate duplicate title
+  const tasks = JSON.parse(fs.readFileSync("./tasks.json", "utf8"));
+  const isDuplicate = tasks.some(
+    (existingTask) =>
+      existingTask.title.toLowerCase() === task.title.toLowerCase()
+  );
+
+  if (isDuplicate) {
+    return "Task title must be unique";
+  }
+
+  // Validate completed
   if (task.completed !== undefined && typeof task.completed !== "boolean") {
     return "Task completed must be a boolean";
   }
@@ -11,10 +35,18 @@ function validateTask(task) {
 }
 
 function validateTaskUpdate(updates) {
-  if (updates.title !== undefined && typeof updates.title !== "string") {
-    return "Task title must be a string";
+  // Validate title if present
+  if (updates.title !== undefined) {
+    if (typeof updates.title !== "string" || updates.title.trim() === "") {
+      return "Task title must be a non-empty string";
+    }
+
+    if (updates.title.length > 100) {
+      return "Task title must be 100 characters or fewer";
+    }
   }
 
+  // Validate completed if present
   if (
     updates.completed !== undefined &&
     typeof updates.completed !== "boolean"

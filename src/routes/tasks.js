@@ -1,43 +1,54 @@
 const url = require("url");
 const { loadTasks, saveTasks } = require("../utils/fileHelpers");
 const handleError = require("../utils/errorHandler");
+const { validateTask, validateTaskUpdate } = require("../utils/taskValidation");
+
+// Helper function to parse request body
+function parseRequestBody(req, res, callback) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", () => {
+    try {
+      const data = JSON.parse(body);
+      callback(data);
+    } catch (error) {
+      handleError(res, 400, "Invalid JSON");
+    }
+  });
+}
+
+// Validate Task ID Helper
+function isValidTaskId(id) {
+  return Number.isInteger(id) && id > 0;
+}
 
 module.exports = (req, res) => {
   const { method, url: requestUrl } = req;
-  const tasks = loadTasks();
-  const parsedUrl = url.parse(requestUrl, true);
+  const parsedUrl = new URL(requestUrl, `http://${req.headers.host}`);
   const pathParts = parsedUrl.pathname.split("/").filter(Boolean);
 
-  // POST /tasks
-  if (method === "POST" && pathParts[0] === "tasks" && pathParts.length === 1) {
-    let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => {
-      try {
-        const newTask = JSON.parse(body);
+  // Reject unsupported methods
+  const isTasksCollection = pathParts[0] === "tasks" && pathParts.length === 1;
+  const isTaskItem = pathParts[0] === "tasks" && pathParts.length === 2;
 
-        // Validate task title
-        if (!newTask.title || typeof newTask.title !== "string") {
-          return handleError(res, 400, "Task must have a valid title");
-        }
+  const supportedMethods = {
+    "/tasks": ["GET", "POST"],
+    "/tasks/:id": ["GET", "PUT", "DELETE"],
+  };
 
-        // Set default completed status
-        newTask.completed = !!newTask.completed;
-        newTask.id = tasks.length > 0 ? tasks[tasks.length - 1].id + 1 : 1;
-        tasks.push(newTask);
-        saveTasks(tasks);
+  const currentPath = isTasksCollection
+    ? "/tasks"
+    : isTaskItem
+    ? "/tasks/:id"
+    : null;
 
-        res.writeHead(201, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(newTask));
-      } catch (error) {
-        return handleError(res, 400, "Invalid JSON");
-      }
-    });
-    return;
+  if (currentPath && !supportedMethods[currentPath].includes(method)) {
+    return handleError(res, 405, "Method not allowed");
   }
 
   // GET /tasks
   if (method === "GET" && pathParts[0] === "tasks" && pathParts.length === 1) {
+    const tasks = loadTasks();
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(tasks));
     return;
@@ -45,7 +56,14 @@ module.exports = (req, res) => {
 
   // GET /tasks/:id
   if (method === "GET" && pathParts[0] === "tasks" && pathParts.length === 2) {
-    const taskId = parseInt(pathParts[1]);
+    const taskId = Number(pathParts[1]);
+
+    // Reject invalid IDs
+    if (!isValidTaskId(taskId)) {
+      return handleError(res, 400, "Invalid task ID");
+    }
+
+    const tasks = loadTasks();
     const task = tasks.find((t) => t.id === taskId);
 
     if (!task) {
@@ -57,42 +75,56 @@ module.exports = (req, res) => {
     return;
   }
 
+  // POST /tasks
+  if (method === "POST" && pathParts[0] === "tasks" && pathParts.length === 1) {
+    parseRequestBody(req, res, (newTask) => {
+      const tasks = loadTasks();
+
+      // Validate the task
+      const error = validateTask(newTask);
+      if (error) {
+        return handleError(res, 400, error);
+      }
+
+      // Set default completed status if not provided
+      newTask.completed = newTask.completed || false;
+      newTask.id = tasks.length > 0 ? tasks[tasks.length - 1].id + 1 : 1;
+      tasks.push(newTask);
+      saveTasks(tasks);
+
+      res.writeHead(201, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(newTask));
+    });
+    return;
+  }
+
   // PUT /tasks/:id
   if (method === "PUT" && pathParts[0] === "tasks" && pathParts.length === 2) {
-    const taskId = parseInt(pathParts[1]);
+    const taskId = Number(pathParts[1]);
+
+    // Reject invalid IDs
+    if (!isValidTaskId(taskId)) {
+      return handleError(res, 400, "Invalid task ID");
+    }
+
+    const tasks = loadTasks();
     const taskIndex = tasks.findIndex((t) => t.id === taskId);
 
     if (taskIndex === -1) {
       return handleError(res, 404, "Task not found");
     }
 
-    let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    req.on("end", () => {
-      try {
-        const updates = JSON.parse(body);
-
-        // Validate title if present
-        if (updates.title !== undefined && typeof updates.title !== "string") {
-          return handleError(res, 400, "Task title must be a string");
-        }
-
-        // Validate completed if present
-        if (
-          updates.completed !== undefined &&
-          typeof updates.completed !== "boolean"
-        ) {
-          return handleError(res, 400, "Task completed must be a boolean");
-        }
-
-        tasks[taskIndex] = { ...tasks[taskIndex], ...updates };
-        saveTasks(tasks);
-
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify(tasks[taskIndex]));
-      } catch (error) {
-        return handleError(res, 400, "Invalid JSON");
+    parseRequestBody(req, res, (updates) => {
+      const error = validateTaskUpdate(updates);
+      if (error) {
+        return handleError(res, 400, error);
       }
+
+      tasks[taskIndex] = { ...tasks[taskIndex], ...updates };
+      saveTasks(tasks);
+
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(tasks[taskIndex]));
     });
     return;
   }
@@ -103,7 +135,14 @@ module.exports = (req, res) => {
     pathParts[0] === "tasks" &&
     pathParts.length === 2
   ) {
-    const taskId = parseInt(pathParts[1]);
+    const taskId = Number(pathParts[1]);
+
+    // Reject invalid IDs
+    if (!isValidTaskId(taskId)) {
+      return handleError(res, 400, "Invalid task ID");
+    }
+
+    const tasks = loadTasks();
     const taskIndex = tasks.findIndex((t) => t.id === taskId);
 
     if (taskIndex === -1) {
@@ -118,6 +157,6 @@ module.exports = (req, res) => {
     return;
   }
 
-  // Not found
+  // Fallback for unknown routes
   handleError(res, 404, "Not found");
 };
