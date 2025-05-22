@@ -4,15 +4,17 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "test": "jest"
+    "test": "jest",
+    "migrate": "node src/utils/migrate.js"
   },
   "devDependencies": {
     "jest": "^29.7.0",
     "supertest": "^7.1.0"
   },
   "dependencies": {
+    "cors": "^2.8.5",
     "dotenv": "^16.5.0",
     "morgan": "^1.10.0",
-    "cors": "^2.8.5"
+    "sqlite3": "^5.1.7"
   }
 }

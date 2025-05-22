@@ -1,21 +1,62 @@
-# Mini Task Tracker
+# 📝 Mini Task Tracker
 
-A simple Node.js HTTP server for tracking tasks with full CRUD functionality, logging, and basic error handling.
+A lightweight Node.js HTTP server for managing tasks with full CRUD (Create, Read, Update, Delete) functionality, logging, error handling, rate limiting, and CORS support. Ideal for learning raw Node.js server patterns and demonstrating backend fundamentals.
 
-## Features
+---
 
-- Full CRUD (Create, Read, Update, Delete) support
-- JSON file-based storage
-- Centralized error handling
-- Logging with morgan
-- Environment variable support
+## 🚀 Features
 
-## Getting Started
+- 📦 Raw Node.js HTTP Server — built without Express
+- 💾 SQLite-backed task storage
+- ✅ Full CRUD API (Create, Read, Update, Delete)
+- 🔒 Validation for input data and task schema
+- 🛡️ Rate limiting with IP tracking
+- 🌐 CORS protection (whitelisted origins)
+- 📄 Logging to console and file
+- 🧪 Tested with Jest + Supertest
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/<your-username>/mini-task-tracker.git
-   cd mini-task-tracker
-   npm install
-   npm start
-   ```
+---
+
+## 🧰 Tech Stack
+
+- Node.js
+- SQLite3
+- Jest + Supertest (for testing)
+
+---
+
+## 🛠️ Getting Started
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/<your-username>/mini-task-tracker.git
+cd mini-task-tracker
+npm install
+```
+
+### 2. Create the Database
+
+```bash
+npm run migrate
+```
+
+### 3. Configure the Enviroment 
+
+Create a .env file: 
+
+PORT=3000
+DB_FILE=tasks.db
+ALLOWED_ORIGINS=http://localhost:3000
+
+### 4. Start the Server
+
+```bash
+npm start
+```
+
+### Run tests
+
+```bash
+npm run test
+```

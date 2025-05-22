@@ -2,6 +2,7 @@ require("dotenv").config();
 const http = require("http");
 const taskRoutes = require("./routes/tasks");
 const { logger, consoleLogger } = require("./utils/logger");
+const rateLimiter = require("./utils/rateLimiter");
 
 // CORS Configuration
 const allowedOrigins = process.env.ALLOWED_ORIGINS.split(",");
@@ -12,7 +13,10 @@ const server = http.createServer((req, res) => {
   consoleLogger(req, res, () => {});
   logger(req, res, () => {});
 
-  // Handle CORS
+  // Rate limiting
+  if (!rateLimiter(req, res)) return;
+
+  // CORS headers
   const origin = req.headers.origin;
   if (origin && allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
@@ -25,6 +29,10 @@ const server = http.createServer((req, res) => {
       "Content-Type, Authorization"
     );
     res.setHeader("Access-Control-Allow-Credentials", "true");
+  }
+
+  if (origin && !allowedOrigins.includes(origin)) {
+    console.warn(`Blocked CORS request from disallowed origin: ${origin}`);
   }
 
   // Preflight request handling

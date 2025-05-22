@@ -1,23 +1,34 @@
-require("dotenv").config();
-const morgan = require("morgan");
 const fs = require("fs");
 const path = require("path");
 
-// Log file location (from .env or default to logs.txt)
-const LOG_FILE = process.env.LOG_FILE || "logs.txt";
+const logFilePath = path.join(__dirname, "../../logs.txt");
 
-// Create a write stream for the log file
-const logStream = fs.createWriteStream(
-  path.join(__dirname, "../..", LOG_FILE),
-  { flags: "a" }
-);
+function logger(req, res, next) {
+  const start = Date.now();
 
-// Configure Morgan
-const logger = morgan("combined", {
-  stream: logStream,
-});
+  // Hook into the response's finish event to log after response is sent
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    const logLine = `${new Date().toISOString()} ${req.method} ${req.url} ${
+      res.statusCode
+    } ${duration}ms\n`;
+    fs.appendFile(logFilePath, logLine, (err) => {
+      if (err) console.error("Failed to write to log file:", err);
+    });
+  });
 
-// Also log to the console
-const consoleLogger = morgan("dev");
+  next();
+}
+
+function consoleLogger(req, res, next) {
+  const start = Date.now();
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    console.log(
+      `${req.method} ${req.url} => ${res.statusCode} (${duration}ms)`
+    );
+  });
+  next();
+}
 
 module.exports = { logger, consoleLogger };
